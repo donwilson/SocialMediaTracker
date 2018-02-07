@@ -1,6 +1,6 @@
 <?php
 	require_once(__DIR__ ."/config.php");
-	require_once(__DIR__ ."/inc/Facebook_Webhook_Entry.php");
+	require_once(__DIR__ ."/lib/Facebook_Webhook_Entry.php");
 	
 	try {
 		if(isset($_REQUEST['hub_mode']) && ("subscribe" === $_REQUEST['hub_mode']) && isset($_REQUEST['hub_challenge'])) {
@@ -14,26 +14,36 @@
 			die;
 		}
 		
+		// request body
+		$request_body = file_get_contents("php://input");
+		
+		
 		// verify X-Hub-Signature header sent by FB
-		if(defined('FB_WEBHOOK_VERIFY_TOKEN') && FB_WEBHOOK_VERIFY_TOKEN) {
-			$request_headers = apache_request_headers();
+		if(defined('FB_APP_SECRET') && FB_APP_SECRET) {
+			/*$request_headers = apache_request_headers();
 			
 			if(!isset($request_headers['X-Hub-Signature'])) {
 				throw new Exception("Request header 'X-Hub-Signature' not defined");
+			}*/
+			
+			list($req_algo, $req_hash) = explode("=", getenv("HTTP_X_HUB_SIGNATURE"), 2);
+			
+			if(!in_array($req_algo, hash_algos(), TRUE)) {
+				throw new Exception("Requester's hash algorithm '". $req_algo ."' is not supported.");
 			}
 			
-			if($request_headers['X-Hub-Signature'] != "sha1=". sha1(FB_WEBHOOK_VERIFY_TOKEN)) {
-				throw new Exception("Request header 'X-Hub-Signature' with value '". $request_headers['X-Hub-Signature'] ."' doesn't match verify token");
+			if(!hash_equals(hash_hmac($req_algo, $request_body, FB_APP_SECRET), $req_hash)) {
+				throw new Exception("Request header 'X-Hub-Signature' with value '". $req_hash ."' doesn't match verify token");
 			}
 			
-			unset($request_headers);
+			//unset($request_headers);
+			unset($req_algo, $req_hash);
 		}
 		
 		// do stuff
-		$request_body = file_get_contents("php://input");
-		$data = json_decode($request_body, true);
+		$data = @json_decode($request_body, true);
 		
-		file_put_contents(TMP_DIR ."webhook_fb.php.". microtime(true) .".txt", print_r([
+		file_put_contents(TMP_DIR . microtime(true) ."-webhook_fb.php.txt", print_r([
 			'request_body' => $request_body,
 			'data' => $data,
 		], true));
@@ -68,7 +78,7 @@
 			$handler = new $entry_handler($entry);
 		}
 	} catch(Exception $e) {
-		file_put_contents(TMP_DIR ."webhook_fb.php-error.". microtime(true) .".txt", print_r([
+		file_put_contents(TMP_DIR . microtime(true) ."-webhook_fb.php-error.txt", print_r([
 			'get' => $_GET,
 			'post' => $_POST,
 			'php_input' => file_get_contents("php://input"),
