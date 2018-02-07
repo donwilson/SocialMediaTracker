@@ -1,0 +1,5 @@
+sensitive_passwords.php
+vendor/
+composer.lock
+tmp/
+.htpasswd
